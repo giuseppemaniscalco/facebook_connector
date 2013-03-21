@@ -1,0 +1,511 @@
+{literal}
+<script language="javascript">
+<!--
+var $j = jQuery.noConflict();
+
+var pricesChanged = {};
+
+$j(function()
+{
+	$j('#updateButton').click(function()
+	{
+		$j.ajax(
+		{
+			type     : 'post',
+			url      : makeUrl ( { module : 'admin', action : 'updatePrices' } ),
+			dataType : 'json',					
+			data     : { 'parameters' : pricesChanged },
+			beforeSend : function()
+			{
+				$j('#updateButton').after
+				(
+					$j('<span>')
+					.attr('id','loadingMessage')
+					.text('{/literal}{$result->translate("Loading")|escape}...{literal}')
+				);
+			},
+			complete   : function()
+			{
+				$j('#loadingMessage').remove();
+				
+				$j('html, body').animate({ scrollTop: 0 }, 60);
+				
+				pricesChanged = {};
+				
+				getListProductZone();
+				
+				$j('.messageAjax').delay(2000).hide('slow');
+			},
+			success  : function (response) 
+			{
+				if(response.result)
+				{
+					for(id in pricesChanged)
+					{
+						if(id.indexOf('assign-product_') !== false)
+						{
+							$j('#' + id).attr('checked', $j('#' + id).attr('checked'));
+						}
+						else
+						{
+							$j('#' + id).val(pricesChanged[id]);
+						}
+					}
+				}
+				$j('.messageAjax').text(response.status);
+				$j('.messageAjax').show();
+			}
+		});
+	});
+	
+	$j('.otherPaginationLink').live('click', function()
+	{
+		var numberPage = $j(this).val();
+		$j('#currentPage').val(numberPage);
+		$j('.currentPaginationLink').attr('class','otherPaginationLink');
+		$j(this).attr('class','currentPaginationLink');
+		getListProductZone(numberPage);
+	});	
+	
+	$j('.checkboxAssigned').live('change', function()
+	{
+		var key            = $j(this).attr('id');
+		pricesChanged[key] = $j(this).attr('checked');
+	});
+	
+	$j('#checkAll').change(function()
+	{
+		$j('.checkboxAssigned').attr('checked', $j('#checkAll').attr('checked'));
+		$j('.checkboxAssigned').each(function()
+		{
+			var key            = $j(this).attr('id');
+			pricesChanged[key] = $j(this).attr('checked');
+		});
+	});
+	
+	$j('.textPrice').live('keyup', function()
+	{
+		var key            = $j(this).attr('id');
+		pricesChanged[key] = $j(this).val();
+		$j('#default_' + key).hide();
+	});
+			
+	$j('#filter').change(function()
+	{
+		getListProductZone();
+	});
+	
+	$j('#limit').change(function()
+	{
+		getListProductZone();
+	});
+			
+	$j('#zoneId').change(function()
+	{
+		$j('#labelCurrency').remove();
+		var zoneId = $j('#zoneId');
+					
+		if(zoneId > 0)
+		{
+			$j.ajax(
+			{
+				type     : 'post',
+				url      : makeUrl ( { module : 'admin', action : 'getCurrencyByZoneId' } ),
+				dataType : 'json',					
+				data     : { 'zoneId' : zoneId },
+				beforeSend : function()
+				{
+					$j('#gridData').before
+					(
+						$j('<span>')
+						.attr('id','loadingMessage')
+						.text('{/literal}{$result->translate("Loading")|escape}...{literal}')
+					);
+				},
+				complete   : function()
+				{
+					$j('#loadingMessage').remove();
+				},
+				success  : function (response) 
+				{ 
+		        	if(response.status == 'success')
+		        	{
+		        		var locationLink = "{/literal}{$result->makeUrl('edit', 'AdminZone', '')|escape}{literal}zone_id/" + zoneId;
+			        	$j('#labelZoneId').after
+			        	(
+			        		$j('<div>')
+			        		.attr('id','labelCurrency')
+			        		.append
+			        		(
+				        		$j('<label>')
+				        		.addClass('tipOwner')
+				        		.attr('for','currency')
+				        		.text("{/literal}{$result->translate('Currency')|escape}{literal}:"),
+				        		$j('<input>')
+				        		.attr('type','text')
+				        		.attr('readonly','readonly')
+				        		.attr('name','currency')
+				        		.attr('size',3)
+				        		.val(response.currency),
+				        		$j('<a>')
+				        		.attr('href', locationLink)
+			        		)
+			        	)
+		        	}					
+				}
+			});
+		}	
+		
+		getListProductZone();
+	});
+				
+	getListProductZone();
+});	
+
+function disableZeroZone()
+{
+	var zoneId = $j('#zoneId').val();
+	if(zoneId == 0)
+	{
+		$j('.zoneZero').attr('disabled','disabled');
+	}
+	else
+	{
+		$j('.zoneZero').remove('disabled');
+	}
+}
+
+function makePagination()
+{
+	var limitPerPage = parseInt($j('#limit').val());
+	var totalItems   = parseInt($j('#totalItems').val());
+	var currentPage  = parseInt($j('#currentPage').val());
+	
+	if(totalItems >= limitPerPage)
+	{
+		$j('.pagination').append
+		(
+			$j('<span>')
+			.text('{/literal}{$result->translate("Page")|escape}: {literal}')
+		);
+		var i = 1;
+		while(i < ((totalItems / limitPerPage) + 1))
+		{
+			var className = ' otherPaginationLink ';
+			if(currentPage == i)
+			{
+				className = ' currentPaginationLink ';				
+			}
+			if(i == 1)
+			{
+				className += ' firstElement ';
+			}
+			$j('.pagination').append
+			(
+				$j('<input>')
+				.attr('type','button')
+				.addClass(className)
+				.val(i)
+			);		
+			i++;
+		}
+	}
+}
+
+function getListProductZone(currentPage)
+{
+	var limit       = parseInt($j('#limit').val()); 
+	var zoneId      = $j('#zoneId').val();
+	if(currentPage == undefined)
+	{
+		currentPage = 1;
+		$j('#currentPage').val(currentPage);
+		$j('.currentPaginationLink').attr('class','otherPaginationLink');
+		$j('.firstElement').attr('class','currentPaginationLink firstElement');
+	}
+	var parameters  = 
+	{
+		'zoneId'      : zoneId, 
+		'filter'      : $j('#filter').val(),
+		'currentPage' : currentPage,
+		'limit'       : limit
+	}	
+	
+	$j('#gridData').html('');
+	$j('.pagination').html('');
+	
+	$j.ajax(
+	{
+		type       : 'post',
+		url        : makeUrl ( { module : 'admin', action : 'getListProductZone' } ),
+		dataType   : 'json',					
+		data       : { 'parameters' : parameters },
+		beforeSend : function()
+		{
+			$j('#gridData').before
+			(
+				$j('<span>')
+				.attr('id','loadingMessage')
+				.text('{/literal}{$result->translate("Loading")|escape}...{literal}')
+			);
+		},
+		complete   : function()
+		{
+			$j('#loadingMessage').remove();
+		},
+		success    : function (response) 
+		{
+        	if(response.status == 'success')
+        	{
+        		$j.each(response.data, function(productId, val) 
+    			{
+					$j('#gridData').append
+					(
+						$j('<tr>')
+						.addClass(val.styleRow + ' rowsStyle')
+						.append
+						(
+							$j('<td>').append
+							(
+								$j('<input>')
+								.attr('type','checkbox')
+								.attr('id','assign-product_' + zoneId + '_' + productId)
+								.attr('name','assign-product_' + zoneId + '_' + productId)
+								.addClass('checkboxAssigned zoneZero')
+								.attr('checked',val.assignedProduct)
+							),
+							$j('<td>').append
+							(
+								$j('<span>')
+								.text(productId)
+							),
+							$j('<td>').append
+							(
+								$j('<img>')
+								.attr('src',val.imagePath)
+								/* $j('<span>').text('') */
+							),
+							$j('<td>').append
+							(
+								$j('<span>')
+								.text(val.productName)
+							),
+							$j('<td>').append
+							(
+								$j('<span>')
+								.text(val.productCode)
+							),
+							$j('<td>').append
+							(
+								$j('<input>')
+								.attr('type','text')
+								.attr('id','sell_' + zoneId + '_' + productId)
+								.attr('name','sell_' + zoneId + '_' + productId)
+								.addClass('textPrice zoneZero')
+								.val(val.sellPrice),
+								$j('<span>')
+								.addClass('defaultPrice')
+								.attr('id','default_sell_' + zoneId + '_' + productId)
+								.text('*')
+								.toggle(val.sellPriceDefault)
+							),
+							$j('<td>').append
+							(
+								$j('<input>')
+								.attr('type','text')
+								.attr('id','buy_' + zoneId + '_' + productId)
+								.attr('name','buy_' + zoneId + '_' + productId)
+								.addClass('textPrice zoneZero')
+								.val(val.buyPrice),
+								$j('<span>')
+								.addClass('defaultPrice')
+								.attr('id','default_buy_' + zoneId + '_' + productId)
+								.text('*')
+								.toggle(val.buyPriceDefault)
+							),
+							$j('<td>').append
+							(
+								$j('<input>')
+								.attr('type','text')
+								.attr('id','to-discount_' + zoneId + '_' + productId)
+								.attr('name','to-discount_' + zoneId + '_' + productId)
+								.addClass('textPrice zoneZero')
+								.val(val.toDiscountPrice),
+								$j('<span>')
+								.addClass('defaultPrice')
+								.attr('id','default_to-discount_' + zoneId + '_' + productId)
+								.text('*')
+								.toggle(val.toDiscountPriceDefault)
+							)
+						)		
+					);
+    			});
+        		$j('#checkAll').after
+    			(
+    				$j('<input>')
+    				.attr('type','hidden')
+    				.attr('id','totalItems')
+    				.val(response.totalItems)
+    			);
+        		$j('.totalItemsText').text(response.totalItems);
+        	}
+        	disableZeroZone();
+        	makePagination();
+		}
+	});
+}
+-->
+</script>
+<style type="text/css">
+<!--
+span.indicator img 
+{ 
+	color            : #000000; 
+	background-color : #FFFF99;
+}
+.defaultPrice
+{
+	color            : red; 
+	font-size        : 16px;   
+}
+.tipOwner 
+{
+	white-space: nowrap;
+}
+table#seachTable 
+{
+	width: 100%;
+}
+
+td#seachTable 
+{
+	width: 33%;
+}
+.wrapGrid
+{
+	width: 100%;
+}
+#loadingMessage
+{
+	color            : red; 
+	font-size        : 16px;   
+}
+.pagination
+{
+	white-space: nowrap;
+}
+.otherPaginationLink
+{
+	font-size: 10px;
+}
+.currentPaginationLink
+{
+	font-size: 16px;
+	color: red;
+}
+.rowsStyle
+{
+	white-space: nowrap;
+}
+-->
+</style>
+{/literal}
+<div id="manager-actions">
+    <span>{$result->translate("Action")|escape}: </span>
+    <a class="action add" href="{$result->makeUrl('add','adminproduct','')|escape}">{$result->translate("New Item")|escape}</a>
+    <a class="action search" href="{$result->makeUrl('search','adminproduct',')|escape}">{$result->translate("Search")|escape}</a>
+    <a class="action import" href="{$result->makeUrl('select_import','adminproduct','')|escape}type/zone_price/">{$result->translate("Import")|escape}</a>
+    <a class="action export" href="{$result->makeUrl('export_zone_product','adminproduct','')|escape}">{$result->translate("Export")|escape}</a>	
+    <a class="action delete" href="{$result->makeUrl('flushcache','adminproduct','')|escape}">{$result->translate("Flush Cache")|escape}</a>
+</div>
+<h2>{$result->pageTitle|escape}</h2>
+<h3 class="messageAjax"></h3>
+<fieldset>
+	<table id="seachTable"> 
+		<tr>
+			<td>
+				<span class="tipOwner" id="labelZoneId">
+					<span class="tipText">{$result->translate("List of the zone enabled")}</span>&nbsp;&nbsp;&nbsp;
+					{$result->translate("List zones")|escape}:
+				</span> 
+			</td>	
+			<td> 
+				<span class="tipOwner">
+					<span class="tipText">{$result->translate("Insert the string to search")}</span>&nbsp;&nbsp;&nbsp;
+					{$result->translate("Filter")|escape}:
+				</span> 
+			</td>
+			<td>
+				<span class="tipOwner">
+					<span class="tipText">{$result->translate("Products par page")}</span>&nbsp;&nbsp;&nbsp;
+					{$result->translate("Products par page")}:
+				</span> 
+			</td>
+			<td>&nbsp;</td>
+		</tr>
+		<tr>
+			<td>
+				<select id="zoneId">
+					<option value="0">{$result->translate("Select zone")}</option>
+					{$result->generateSelect($result->zones, $result->zoneId)}
+				</select>
+			</td>
+			<td>
+				<input type="text" id="filter" value="" />
+			</td>
+			<td>
+				<select id="limit">
+					{$result->generateSelect($result->limits, $result->limit)}
+				</select>
+			</td>
+		</tr>
+	</table> 
+</fieldset>
+<table class='wrapGrid'>
+	<thead>
+		<tr>
+			<th>
+				<span class="tipOwner">
+					<span class="tipText">{$result->translate("Select all")|escape}</span>&nbsp;&nbsp;&nbsp;
+				</span>
+				<input type="checkbox" id="checkAll" />
+			</th>
+			<th>{$result->translate("ID")|escape}</th>
+			<th>{$result->translate("Image")|escape}</th>
+			<th>{$result->translate("Name")|escape}</th>		
+			<th>{$result->translate("Code")|escape}</th>					
+			<th>{$result->translate("Sell")|escape}</th>
+			<th>{$result->translate("Buy")|escape}</th>
+			<th>{$result->translate("To_Discount")|escape}</th>					                       
+		</tr>
+		<tr>
+			<td colspan="8">
+				<span>{$result->translate('Total items')}:&nbsp;<span class="totalItemsText"></span></span>	&nbsp;			
+				<span class="pagination"></span>
+				<input type="hidden" id="currentPage" value="1" />
+			</td>
+		</tr>
+	</thead>	
+	<tbody id="gridData"></tbody>
+	<tfoot>
+		<tr>
+			<td colspan="8">
+				<span>{$result->translate('Total items')}:&nbsp;<span class="totalItemsText"></span></span>&nbsp;			
+				<span class="pagination"></span>
+			</td>
+		</tr>
+		<tr>
+			<td colspan="8">
+				<input type="button" id="updateButton" value="{$result->translate('Update')}" />
+			</td>
+		</tr>
+	</tfoot>
+</table>
+<div id="manager-actions">
+    <span>{$result->translate("Action")|escape}: <span class="totalItemsText"></span></span>
+    <a class="action add" href="{$result->makeUrl('add','adminproduct','')|escape}">{$result->translate("New Item")|escape}</a>
+    <a class="action search" href="{$result->makeUrl('search','adminproduct',')|escape}">{$result->translate("Search")|escape}</a>
+    <a class="action import" href="{$result->makeUrl('select_import','adminproduct','')|escape}type/zone_price/">{$result->translate("Import")|escape}</a>
+    <a class="action export" href="{$result->makeUrl('export_zone_product','adminproduct','')|escape}">{$result->translate("Export")|escape}</a>	
+    <a class="action delete" href="{$result->makeUrl('flushcache','adminproduct','')|escape}">{$result->translate("Flush Cache")|escape}</a>
+</div>
